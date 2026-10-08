@@ -11,4 +11,4 @@ public interface WatchSpaceParticipantRepository
 
     boolean existsByWatchSpace_IdAndUserId(Long watchSpaceId, Long userId);
     List<WatchSpaceParticipant> findByWatchSpace_Id(Long watchSpaceId);
-}
+    List<WatchSpaceParticipant> findByUserId(Long userId);}

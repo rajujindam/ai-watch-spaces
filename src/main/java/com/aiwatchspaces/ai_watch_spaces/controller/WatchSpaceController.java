@@ -79,4 +79,16 @@ public class WatchSpaceController {
 
         return ResponseEntity.ok(participants);
     }
+    @PostMapping("/{id}/end")
+    public ResponseEntity<WatchSpaceResponse> endWatchSpace(
+            @PathVariable Long id,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        Long userId = Long.parseLong(jwt.getSubject());
+
+        WatchSpaceResponse response =
+                watchSpaceService.endWatchSpace(id, userId);
+
+        return ResponseEntity.ok(response);
+    }
 }

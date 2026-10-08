@@ -2,6 +2,7 @@
 package com.aiwatchspaces.ai_watch_spaces.service;
 
 import com.aiwatchspaces.ai_watch_spaces.dto.CreateTimelineEventRequest;
+import com.aiwatchspaces.ai_watch_spaces.dto.CreateTimelineMetadataRequest;
 import com.aiwatchspaces.ai_watch_spaces.dto.TimelineEventResponse;
 import com.aiwatchspaces.ai_watch_spaces.entity.Title;
 import com.aiwatchspaces.ai_watch_spaces.entity.TimelineEvent;
@@ -15,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -105,5 +107,44 @@ public class TimelineEventService {
                 event.getEventType(),
                 event.getPayload()
         );
+    }
+    @Transactional
+    public List<TimelineEventResponse> createMetadata(
+            CreateTimelineMetadataRequest request
+    ) {
+        Title title = titleRepository.findById(request.getTitleId())
+                .orElseThrow(() ->
+                        new TitleNotFoundException(
+                                "Title not found with id: " + request.getTitleId()
+                        )
+                );
+
+        List<TimelineEvent> events = new ArrayList<>();
+
+        for (CreateTimelineEventRequest eventRequest : request.getEvents()) {
+
+            if (eventRequest.getTimestampSeconds() > title.getDurationSeconds()) {
+                throw new InvalidTimelineRequestException(
+                        "Event timestamp cannot exceed title duration: "
+                                + eventRequest.getTimestampSeconds()
+                );
+            }
+
+            TimelineEvent event = new TimelineEvent(
+                    title,
+                    eventRequest.getTimestampSeconds(),
+                    eventRequest.getEventType(),
+                    eventRequest.getPayload()
+            );
+
+            events.add(event);
+        }
+
+        List<TimelineEvent> savedEvents =
+                timelineEventRepository.saveAll(events);
+
+        return savedEvents.stream()
+                .map(this::toResponse)
+                .toList();
     }
 }

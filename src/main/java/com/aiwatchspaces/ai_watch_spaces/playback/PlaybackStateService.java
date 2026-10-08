@@ -2,6 +2,7 @@ package com.aiwatchspaces.ai_watch_spaces.playback;
 
 import com.aiwatchspaces.ai_watch_spaces.entity.Title;
 import com.aiwatchspaces.ai_watch_spaces.entity.WatchSpace;
+import com.aiwatchspaces.ai_watch_spaces.entity.WatchSpaceStatus;
 import com.aiwatchspaces.ai_watch_spaces.exception.TitleNotFoundException;
 import com.aiwatchspaces.ai_watch_spaces.exception.WatchSpaceAccessDeniedException;
 import com.aiwatchspaces.ai_watch_spaces.exception.WatchSpaceNotFoundException;
@@ -31,11 +32,20 @@ public class PlaybackStateService {
         WatchSpace room = findRoom(watchSpaceId);
         checkHost(room, userId);
 
+        if (room.getStatus() == WatchSpaceStatus.SCHEDULED) {
+            room.setStatus(WatchSpaceStatus.LIVE);
+            watchSpaceRepository.save(room);
+        }
+
         PlaybackState state = getOrCreateState(watchSpaceId);
 
         synchronized (state) {
 
-            double currentPosition = getCurrentPosition(state,getTitleDuration(watchSpaceId));
+            double currentPosition =
+                    getCurrentPosition(
+                            state,
+                            getTitleDuration(watchSpaceId)
+                    );
 
             state.setPositionSeconds(currentPosition);
             state.setStatus(PlaybackStatus.PLAYING);

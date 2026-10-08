@@ -1,6 +1,7 @@
 package com.aiwatchspaces.ai_watch_spaces.websocket;
 
 import com.aiwatchspaces.ai_watch_spaces.ai.AiTriviaService;
+import com.aiwatchspaces.ai_watch_spaces.service.WatchSpaceEventService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
@@ -11,6 +12,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.Map;
 import java.util.Objects;
 
 @Component
@@ -24,6 +26,7 @@ public class WatchSpaceWebSocketHandler
     private final ChatEventFactory chatEventFactory;
     private final AiTriviaService aiTriviaService;
     private final AiTriviaEventFactory aiTriviaEventFactory;
+    private final WatchSpaceEventService watchSpaceEventService;
 
     @Override
     public Mono<Void> handle(WebSocketSession session) {
@@ -56,6 +59,12 @@ public class WatchSpaceWebSocketHandler
                     roomManager.addSession(
                             watchSpaceId,
                             connection
+                    );
+                    watchSpaceEventService.recordEvent(
+                            watchSpaceId,
+                            userId,
+                            "PARTICIPANT_JOINED",
+                            Map.of()
                     );
 
                     WebSocketEvent joinedEvent =
@@ -131,6 +140,12 @@ public class WatchSpaceWebSocketHandler
                                                                                 userId,
                                                                                 chatMessage
                                                                         );
+                                                        watchSpaceEventService.recordEvent(
+                                                                watchSpaceId,
+                                                                userId,
+                                                                "CHAT_MESSAGE",
+                                                                Map.of()
+                                                        );
 
                                                         return roomManager
                                                                 .broadcast(
@@ -164,6 +179,12 @@ public class WatchSpaceWebSocketHandler
                                                         roomManager.removeSession(
                                                                 watchSpaceId,
                                                                 connection
+                                                        );
+                                                        watchSpaceEventService.recordEvent(
+                                                                watchSpaceId,
+                                                                userId,
+                                                                "PARTICIPANT_LEFT",
+                                                                Map.of()
                                                         );
 
                                                         WebSocketEvent leftEvent =

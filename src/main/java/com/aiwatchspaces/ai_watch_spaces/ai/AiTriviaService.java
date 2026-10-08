@@ -3,9 +3,12 @@ package com.aiwatchspaces.ai_watch_spaces.ai;
 import com.aiwatchspaces.ai_watch_spaces.dto.WatchSpaceResponse;
 import com.aiwatchspaces.ai_watch_spaces.playback.PlaybackState;
 import com.aiwatchspaces.ai_watch_spaces.playback.PlaybackStateService;
+import com.aiwatchspaces.ai_watch_spaces.service.WatchSpaceEventService;
 import com.aiwatchspaces.ai_watch_spaces.service.WatchSpaceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -14,6 +17,7 @@ public class AiTriviaService {
     private final WatchSpaceService watchSpaceService;
     private final PlaybackStateService playbackStateService;
     private final AiContentEngine aiContentEngine;
+    private final WatchSpaceEventService watchSpaceEventService;
 
     public String generateTrivia(
             Long watchSpaceId,
@@ -44,10 +48,20 @@ public class AiTriviaService {
         int endSeconds =
                 (int) currentPosition + 60;
 
-        return aiContentEngine.generateTrivia(
-                watchSpace.getTitleId(),
-                startSeconds,
-                endSeconds
+        String trivia =
+                aiContentEngine.generateTrivia(
+                        watchSpace.getTitleId(),
+                        startSeconds,
+                        endSeconds
+                );
+
+        watchSpaceEventService.recordEvent(
+                watchSpaceId,
+                userId,
+                "TRIVIA_SERVED",
+                Map.of()
         );
+
+        return trivia;
     }
 }

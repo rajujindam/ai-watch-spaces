@@ -8,6 +8,7 @@ import com.aiwatchspaces.ai_watch_spaces.dto.WatchSpaceResponse;
 import com.aiwatchspaces.ai_watch_spaces.entity.WatchSpace;
 import com.aiwatchspaces.ai_watch_spaces.entity.WatchSpaceParticipant;
 
+import com.aiwatchspaces.ai_watch_spaces.entity.WatchSpaceStatus;
 import com.aiwatchspaces.ai_watch_spaces.exception.ParticipantAlreadyExistsException;
 import com.aiwatchspaces.ai_watch_spaces.exception.TitleNotFoundException;
 import com.aiwatchspaces.ai_watch_spaces.exception.WatchSpaceAccessDeniedException;
@@ -22,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -36,11 +38,18 @@ public class WatchSpaceService {
     public WatchSpaceResponse createWatchSpace(
             CreateWatchSpaceRequest request,
             Long userId) {
-        if(!titleRepository.existsById(request.getTitleId())) throw new TitleNotFoundException("Title Not available");
+
+        if (!titleRepository.existsById(request.getTitleId())) {
+            throw new TitleNotFoundException("Title Not available");
+        }
+
         WatchSpace watchSpace = new WatchSpace(
                 request.getName(),
                 userId,
-                request.getTitleId()
+                request.getTitleId(),
+                request.getMaxParticipants(),
+                request.getAiVerbosity(),
+                request.getVotingEnabled()
         );
 
         WatchSpace savedWatchSpace =
@@ -147,7 +156,12 @@ public class WatchSpaceService {
                 watchSpace.getName(),
                 watchSpace.getHostId(),
                 watchSpace.getTitleId(),
-                watchSpace.getCreatedAt()
+                watchSpace.getStatus(),
+                watchSpace.getMaxParticipants(),
+                watchSpace.getAiVerbosity(),
+                watchSpace.getVotingEnabled(),
+                watchSpace.getCreatedAt(),
+                watchSpace.getEndedAt()
         );
     }
     @Transactional(readOnly = true)
@@ -162,5 +176,28 @@ public class WatchSpaceService {
                     watchSpaceId
             );
         }
+    }
+    @Transactional
+    public WatchSpaceResponse endWatchSpace(Long watchSpaceId, Long userId) {
+
+        WatchSpace watchSpace = findWatchSpace(watchSpaceId);
+
+        if (!watchSpace.getHostId().equals(userId)) {
+            throw new WatchSpaceAccessDeniedException(watchSpaceId);
+        }
+
+        if (watchSpace.getStatus() != WatchSpaceStatus.LIVE) {
+            throw new IllegalStateException(
+                    "Only a live watch space can be ended"
+            );
+        }
+
+        watchSpace.setStatus(WatchSpaceStatus.ENDED);
+        watchSpace.setEndedAt(LocalDateTime.now());
+
+        WatchSpace savedWatchSpace =
+                watchSpaceRepository.save(watchSpace);
+
+        return toWatchSpaceResponse(savedWatchSpace);
     }
 }
