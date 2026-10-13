@@ -36,7 +36,6 @@ public class AuthController {
     public ResponseEntity<LoginResponse> login(
             @Valid @RequestBody LoginRequest request
     ) {
-        System.out.println("In login");
         LoginResponse response = authService.login(request);
         return ResponseEntity.ok(response);
     }

@@ -8,17 +8,16 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
-import reactor.core.scheduler.Schedulers;
 
 import java.util.Map;
 import java.util.Objects;
 
 @Component
 @RequiredArgsConstructor
-public class WatchSpaceWebSocketHandler
-        implements WebSocketHandler {
+public class WatchSpaceWebSocketHandler implements WebSocketHandler {
 
     private final WatchSpaceRoomManager roomManager;
     private final PresenceEventFactory presenceEventFactory;
@@ -31,8 +30,7 @@ public class WatchSpaceWebSocketHandler
     @Override
     public Mono<Void> handle(WebSocketSession session) {
 
-        Long watchSpaceId =
-                extractWatchSpaceId(session);
+        Long watchSpaceId = extractWatchSpaceId(session);
 
         return session.getHandshakeInfo()
                 .getPrincipal()
@@ -41,182 +39,192 @@ public class WatchSpaceWebSocketHandler
                     JwtAuthenticationToken authentication =
                             (JwtAuthenticationToken) principal;
 
-                    Long userId =
-                            Long.parseLong(
-                                    Objects.requireNonNull(
-                                            authentication
-                                                    .getToken()
-                                                    .getSubject()
-                                    )
-                            );
+                    Long userId = Long.parseLong(
+                            Objects.requireNonNull(
+                                    authentication.getToken().getSubject()
+                            )
+                    );
 
                     WatchSpaceConnection connection =
-                            new WatchSpaceConnection(
-                                    userId,
-                                    session
-                            );
+                            new WatchSpaceConnection(userId, session);
 
-                    roomManager.addSession(
-                            watchSpaceId,
-                            connection
-                    );
-                    watchSpaceEventService.recordEvent(
-                            watchSpaceId,
-                            userId,
-                            "PARTICIPANT_JOINED",
-                            Map.of()
-                    );
+                    roomManager.addSession(watchSpaceId, connection);
 
-                    WebSocketEvent joinedEvent =
-                            presenceEventFactory
-                                    .createJoinedEvent(userId);
+                    return Mono.usingWhen(
+                            Mono.just(connection),
 
-                    return roomManager
-                            .broadcast(
+                            // 1. Main WebSocket processing
+                            ignored -> recordEventAsync(
                                     watchSpaceId,
-                                    joinedEvent
+                                    userId,
+                                    "PARTICIPANT_JOINED"
                             )
-                            .then(
-
-                                    session.receive()
-
-                                            .flatMap(message -> {
-
-                                                String payload =
-                                                        message.getPayloadAsText();
-
-                                                try {
-
-                                                    WebSocketEvent event =
-                                                            objectMapper.readValue(
-                                                                    payload,
-                                                                    WebSocketEvent.class
-                                                            );
-
-                                                    // AI TRIVIA
-                                                    if ("ai.trivia".equals(event.getType())) {
-
-                                                        return Mono.fromCallable(() ->
-                                                                        aiTriviaService.generateTrivia(
-                                                                                watchSpaceId,
-                                                                                userId
-                                                                        )
-                                                                )
-                                                                .subscribeOn(Schedulers.boundedElastic())
-                                                                .map(trivia ->
-                                                                        aiTriviaEventFactory
-                                                                                .createTriviaEvent(trivia)
-                                                                )
-                                                                .flatMap(triviaEvent ->
-                                                                        roomManager.broadcast(
-                                                                                watchSpaceId,
-                                                                                triviaEvent
-                                                                        )
-                                                                );
-                                                    }
-                                                    // CHAT MESSAGE
-                                                    if ("chat.message".equals(event.getType())) {
-
-                                                        Object messageData =
-                                                                event.getData()
-                                                                        .get("message");
-
-                                                        if (messageData == null) {
-                                                            return Mono.empty();
-                                                        }
-
-                                                        String chatMessage =
-                                                                messageData
-                                                                        .toString()
-                                                                        .trim();
-
-                                                        if (chatMessage.isEmpty()) {
-                                                            return Mono.empty();
-                                                        }
-
-                                                        WebSocketEvent chatEvent =
-                                                                chatEventFactory
-                                                                        .createChatMessage(
-                                                                                userId,
-                                                                                chatMessage
-                                                                        );
-                                                        watchSpaceEventService.recordEvent(
-                                                                watchSpaceId,
-                                                                userId,
-                                                                "CHAT_MESSAGE",
-                                                                Map.of()
-                                                        );
-
-                                                        return roomManager
-                                                                .broadcast(
-                                                                        watchSpaceId,
-                                                                        chatEvent
-                                                                );
-                                                    }
-
-                                                    // Ignore unknown event types
-                                                    return Mono.empty();
-
-                                                } catch (JacksonException exception) {
-
-                                                    System.out.println(
-                                                            "Invalid WebSocket event: "
-                                                                    + exception.getMessage()
-                                                    );
-
-                                                    return Mono.empty();
-                                                }
-                                            })
-
-                                            /*
-                                             * When the WebSocket receive stream
-                                             * completes, remove the connection
-                                             * and broadcast LEFT.
-                                             */
-                                            .then(
-                                                    Mono.defer(() -> {
-
-                                                        roomManager.removeSession(
-                                                                watchSpaceId,
-                                                                connection
-                                                        );
-                                                        watchSpaceEventService.recordEvent(
-                                                                watchSpaceId,
-                                                                userId,
-                                                                "PARTICIPANT_LEFT",
-                                                                Map.of()
-                                                        );
-
-                                                        WebSocketEvent leftEvent =
-                                                                presenceEventFactory
-                                                                        .createLeftEvent(
-                                                                                userId
-                                                                        );
-
-                                                        return roomManager
-                                                                .broadcast(
-                                                                        watchSpaceId,
-                                                                        leftEvent
-                                                                );
-                                                    })
+                                    .then(
+                                            roomManager.broadcast(
+                                                    watchSpaceId,
+                                                    presenceEventFactory
+                                                            .createJoinedEvent(userId)
                                             )
-                            );
+                                    )
+                                    .then(
+                                            session.receive()
+                                                    .concatMap(message ->
+                                                            handleMessage(
+                                                                    message.getPayloadAsText(),
+                                                                    watchSpaceId,
+                                                                    userId
+                                                            )
+                                                    )
+                                                    .then()
+                                    ),
+
+                            // 2. Cleanup after normal completion
+                            resource -> cleanupConnection(
+                                    watchSpaceId,
+                                    userId,
+                                    resource
+                            ),
+
+                            // 3. Cleanup after an error
+                            (resource, error) -> cleanupConnection(
+                                    watchSpaceId,
+                                    userId,
+                                    resource
+                            ),
+
+                            // 4. Cleanup after cancellation
+                            resource -> cleanupConnection(
+                                    watchSpaceId,
+                                    userId,
+                                    resource
+                            )
+                    );
                 });
     }
 
-    private Long extractWatchSpaceId(
-            WebSocketSession session
+    private Mono<Void> handleMessage(
+            String payload,
+            Long watchSpaceId,
+            Long userId
     ) {
+        try {
+            WebSocketEvent event = objectMapper.readValue(
+                    payload,
+                    WebSocketEvent.class
+            );
 
-        String path =
-                session.getHandshakeInfo()
-                        .getUri()
-                        .getPath();
+            // AI TRIVIA
+            if ("ai.trivia".equals(event.getType())) {
+                return Mono.fromCallable(() ->
+                                aiTriviaService.generateTrivia(
+                                        watchSpaceId,
+                                        userId
+                                )
+                        )
+                        .subscribeOn(Schedulers.boundedElastic())
+                        .map(aiTriviaEventFactory::createTriviaEvent)
+                        .flatMap(triviaEvent ->
+                                roomManager.broadcast(
+                                        watchSpaceId,
+                                        triviaEvent
+                                )
+                        );
+            }
+
+            // CHAT MESSAGE
+            if ("chat.message".equals(event.getType())) {
+
+                if (event.getData() == null) {
+                    return Mono.empty();
+                }
+
+                Object messageData = event.getData().get("message");
+
+                if (messageData == null) {
+                    return Mono.empty();
+                }
+
+                String chatMessage = messageData.toString().trim();
+
+                if (chatMessage.isEmpty()) {
+                    return Mono.empty();
+                }
+
+                WebSocketEvent chatEvent =
+                        chatEventFactory.createChatMessage(
+                                userId,
+                                chatMessage
+                        );
+
+                return recordEventAsync(
+                        watchSpaceId,
+                        userId,
+                        "CHAT_MESSAGE"
+                )
+                        .then(
+                                roomManager.broadcast(
+                                        watchSpaceId,
+                                        chatEvent
+                                )
+                        );
+            }
+
+            // Ignore unknown event types
+            return Mono.empty();
+
+        } catch (JacksonException exception) {
+            System.err.println(
+                    "Invalid WebSocket event: " + exception.getMessage()
+            );
+
+            return Mono.empty();
+        }
+    }
+
+    private Mono<Void> cleanupConnection(
+            Long watchSpaceId,
+            Long userId,
+            WatchSpaceConnection connection
+    ) {
+        roomManager.removeSession(watchSpaceId, connection);
+
+        return recordEventAsync(
+                watchSpaceId,
+                userId,
+                "PARTICIPANT_LEFT"
+        )
+                .then(
+                        roomManager.broadcast(
+                                watchSpaceId,
+                                presenceEventFactory.createLeftEvent(userId)
+                        )
+                );
+    }
+
+    private Mono<Void> recordEventAsync(
+            Long watchSpaceId,
+            Long userId,
+            String eventType
+    ) {
+        return Mono.<Void>fromRunnable(() ->
+                        watchSpaceEventService.recordEvent(
+                                watchSpaceId,
+                                userId,
+                                eventType,
+                                Map.of()
+                        )
+                )
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private Long extractWatchSpaceId(WebSocketSession session) {
+
+        String path = session.getHandshakeInfo()
+                .getUri()
+                .getPath();
 
         String[] parts = path.split("/");
 
-        return Long.parseLong(
-                parts[parts.length - 1]
-        );
+        return Long.parseLong(parts[parts.length - 1]);
     }
 }

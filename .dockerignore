@@ -1,0 +1,8 @@
+```text
+target/
+.git/
+.idea/
+.env
+application-local.properties
+*.log
+```

@@ -4,6 +4,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.Objects;
 
@@ -15,19 +17,24 @@ public class AiAskController {
     private final AiAskService aiAskService;
 
     @PostMapping("/{watchSpaceId}/ai/ask")
-    public AiAskResponse askQuestion(
+    public Mono<AiAskResponse> askQuestion(
             @PathVariable Long watchSpaceId,
             @Valid @RequestBody AiAskRequest request,
             JwtAuthenticationToken authentication
     ) {
-
-        Long userId =
-                Long.valueOf(Objects.requireNonNull(authentication.getToken().getSubject()));
-
-        return aiAskService.askQuestion(
-                watchSpaceId,
-                userId,
-                request.question()
+        Long userId = Long.valueOf(
+                Objects.requireNonNull(
+                        authentication.getToken().getSubject()
+                )
         );
+
+        return Mono.fromCallable(() ->
+                        aiAskService.askQuestion(
+                                watchSpaceId,
+                                userId,
+                                request.question()
+                        )
+                )
+                .subscribeOn(Schedulers.boundedElastic());
     }
 }

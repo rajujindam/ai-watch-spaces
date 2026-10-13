@@ -1,6 +1,7 @@
 package com.aiwatchspaces.ai_watch_spaces.websocket;
 
 import com.aiwatchspaces.ai_watch_spaces.ai.AiTriviaService;
+import com.aiwatchspaces.ai_watch_spaces.service.WatchSpaceEventService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -26,8 +27,8 @@ class WatchSpaceWebSocketHandlerTest {
     private ChatEventFactory chatEventFactory;
     private AiTriviaService aiTriviaService;
     private AiTriviaEventFactory aiTriviaEventFactory;
-
     private WatchSpaceWebSocketHandler handler;
+    private WatchSpaceEventService watchSpaceEventService;
 
     @BeforeEach
     void setUp() {
@@ -37,6 +38,7 @@ class WatchSpaceWebSocketHandlerTest {
         chatEventFactory = mock(ChatEventFactory.class);
         aiTriviaService = mock(AiTriviaService.class);
         aiTriviaEventFactory = mock(AiTriviaEventFactory.class);
+        watchSpaceEventService = mock(WatchSpaceEventService.class);
 
         ObjectMapper objectMapper = new ObjectMapper();
 
@@ -46,7 +48,8 @@ class WatchSpaceWebSocketHandlerTest {
                 objectMapper,
                 chatEventFactory,
                 aiTriviaService,
-                aiTriviaEventFactory
+                aiTriviaEventFactory,
+                watchSpaceEventService
         );
     }
 
