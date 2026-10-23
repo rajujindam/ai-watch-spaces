@@ -29,11 +29,17 @@ public class SecurityConfig {
                         ).permitAll()
 
                         // Allow public health checks and the root URL
+
                         .pathMatchers(
                                 "/",
                                 "/actuator/health",
-                                "/actuator/health/**"
+                                "/actuator/health/**",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs",
+                                "/v3/api-docs/**"
                         ).permitAll()
+
 
                         .pathMatchers("/api/v1/admin/**")
                         .hasRole("ADMIN")
