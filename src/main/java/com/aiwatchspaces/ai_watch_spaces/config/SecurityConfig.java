@@ -20,6 +20,7 @@ public class SecurityConfig {
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
 
+
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(
                                 HttpMethod.POST,
@@ -27,12 +28,20 @@ public class SecurityConfig {
                                 "/api/v1/auth/login"
                         ).permitAll()
 
+                        // Allow public health checks and the root URL
                         .pathMatchers(
-                                "/api/v1/admin/**"
-                        ).hasRole("ADMIN")
+                                "/",
+                                "/actuator/health",
+                                "/actuator/health/**"
+                        ).permitAll()
 
+                        .pathMatchers("/api/v1/admin/**")
+                        .hasRole("ADMIN")
+
+                        // All remaining endpoints require authentication
                         .anyExchange().authenticated()
                 )
+
 
                 .oauth2ResourceServer(oauth2 ->
                         oauth2.jwt(jwt ->
