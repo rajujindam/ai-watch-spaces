@@ -55,14 +55,28 @@ public class AiAskService {
         int endSeconds =
                 (int) currentPosition + 60;
 
-        String answer =
-                aiContentEngine.answerQuestion(
+
+        GroundedAnswer result =
+                aiContentEngine.answerQuestionWithSources(
                         question,
                         watchSpace.getTitleId(),
                         startSeconds,
                         endSeconds
                 );
 
-        return new AiAskResponse(answer);
+        java.util.List<AiAskResponse.SourceEvent> sources =
+                result.sources().stream()
+                        .map(event -> new AiAskResponse.SourceEvent(
+                                event.getId(),
+                                event.getTimestampSeconds(),
+                                event.getEventType()
+                        ))
+                        .toList();
+
+        return new AiAskResponse(
+                result.answer(),
+                sources
+        );
+
     }
 }

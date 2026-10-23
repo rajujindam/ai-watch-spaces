@@ -68,4 +68,39 @@ public class AiContentEngine {
 
         return aiProvider.generateTrivia(context);
     }
+
+
+    public GroundedAnswer answerQuestionWithSources(
+            String question,
+            Long titleId,
+            Integer startSeconds,
+            Integer endSeconds
+    ) {
+        List<TimelineEvent> events =
+                timelineRetrievalService.getEvents(
+                        titleId,
+                        startSeconds,
+                        endSeconds
+                );
+
+        if (events.isEmpty()) {
+            return new GroundedAnswer(
+                    "I couldn't find relevant timeline information to answer that question.",
+                    events
+            );
+        }
+
+        String context =
+                timelineContextBuilder.buildContext(events);
+
+        String answer =
+                aiProvider.generateAnswer(
+                        question,
+                        context
+                );
+
+        return new GroundedAnswer(answer, events);
+    }
+
+
 }

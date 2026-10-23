@@ -9,10 +9,7 @@ import com.aiwatchspaces.ai_watch_spaces.entity.WatchSpace;
 import com.aiwatchspaces.ai_watch_spaces.entity.WatchSpaceParticipant;
 
 import com.aiwatchspaces.ai_watch_spaces.entity.WatchSpaceStatus;
-import com.aiwatchspaces.ai_watch_spaces.exception.ParticipantAlreadyExistsException;
-import com.aiwatchspaces.ai_watch_spaces.exception.TitleNotFoundException;
-import com.aiwatchspaces.ai_watch_spaces.exception.WatchSpaceAccessDeniedException;
-import com.aiwatchspaces.ai_watch_spaces.exception.WatchSpaceNotFoundException;
+import com.aiwatchspaces.ai_watch_spaces.exception.*;
 
 import com.aiwatchspaces.ai_watch_spaces.repository.TitleRepository;
 import com.aiwatchspaces.ai_watch_spaces.repository.WatchSpaceParticipantRepository;
@@ -25,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -75,7 +73,15 @@ public class WatchSpaceService {
             Long watchSpaceId,
             Long userId) {
 
-        WatchSpace watchSpace = findWatchSpace(watchSpaceId);
+        WatchSpace watchSpace = watchSpaceRepository
+                .findByIdForUpdate(watchSpaceId)
+                .orElseThrow(() ->
+                        new WatchSpaceNotFoundException(watchSpaceId)
+                );
+
+        if (Boolean.TRUE.equals(watchSpace.getLocked())) {
+            throw new WatchSpaceLockedException(watchSpaceId);
+        }
 
         if (participantRepository
                 .existsByWatchSpace_IdAndUserId(watchSpaceId, userId)) {
@@ -85,6 +91,14 @@ public class WatchSpaceService {
                     userId
             );
         }
+
+        long participantCount =
+                participantRepository.countByWatchSpace_Id(watchSpaceId);
+
+        if (participantCount >= watchSpace.getMaxParticipants()) {
+            throw new WatchSpaceCapacityExceededException(watchSpaceId);
+        }
+
 
         WatchSpaceParticipant participant =
                 new WatchSpaceParticipant(watchSpace, userId);
@@ -199,5 +213,120 @@ public class WatchSpaceService {
                 watchSpaceRepository.save(watchSpace);
 
         return toWatchSpaceResponse(savedWatchSpace);
+    }
+
+    @Transactional(readOnly = true)
+    public Long getHostId(Long watchSpaceId) {
+        return findWatchSpace(watchSpaceId).getHostId();
+    }
+
+    @Transactional
+    public void setWatchSpaceLocked(
+            Long watchSpaceId,
+            Long userId,
+            boolean locked) {
+
+        WatchSpace watchSpace = findWatchSpace(watchSpaceId);
+
+        if (!watchSpace.getHostId().equals(userId)) {
+            throw new WatchSpaceAccessDeniedException(
+                    "Only the host can lock or unlock this watch space"
+            );
+        }
+
+        watchSpace.setLocked(locked);
+    }
+    @Transactional
+    public void removeParticipant(
+            Long watchSpaceId,
+            Long hostId,
+            Long participantUserId) {
+
+        WatchSpace watchSpace = findWatchSpace(watchSpaceId);
+
+        if (!watchSpace.getHostId().equals(hostId)) {
+            throw new WatchSpaceAccessDeniedException(watchSpaceId);
+        }
+
+        if (watchSpace.getHostId().equals(participantUserId)) {
+            throw new IllegalArgumentException(
+                    "The host cannot remove themselves as a participant"
+            );
+        }
+
+        WatchSpaceParticipant participant =
+                participantRepository
+                        .findByWatchSpace_IdAndUserId(
+                                watchSpaceId,
+                                participantUserId
+                        )
+                        .orElseThrow(() ->
+                                new WatchSpaceParticipantNotFoundException(
+                                        watchSpaceId,
+                                        participantUserId
+                                )
+                        );
+
+        participantRepository.delete(participant);
+    }
+    @Transactional
+    public void transferHost(
+            Long watchSpaceId,
+            Long currentHostId,
+            Long newHostId) {
+
+        WatchSpace watchSpace = findWatchSpace(watchSpaceId);
+
+        if (!watchSpace.getHostId().equals(currentHostId)) {
+            throw new WatchSpaceAccessDeniedException(watchSpaceId);
+        }
+
+        if (currentHostId.equals(newHostId)) {
+            throw new IllegalArgumentException(
+                    "You are already the host of this watch space"
+            );
+        }
+
+        boolean isParticipant =
+                participantRepository
+                        .existsByWatchSpace_IdAndUserId(
+                                watchSpaceId,
+                                newHostId
+                        );
+
+        if (!isParticipant) {
+            throw new WatchSpaceParticipantNotFoundException(
+                    watchSpaceId,
+                    newHostId
+            );
+        }
+
+        watchSpace.setHostId(newHostId);
+    }
+    @Transactional
+    public String createInviteCode(Long watchSpaceId, Long userId) {
+        WatchSpace watchSpace = findWatchSpace(watchSpaceId);
+
+        if (!watchSpace.getHostId().equals(userId)) {
+            throw new WatchSpaceAccessDeniedException(watchSpaceId);
+        }
+
+        if (watchSpace.getInviteCode() == null) {
+            watchSpace.setInviteCode(UUID.randomUUID().toString());
+        }
+
+        return watchSpace.getInviteCode();
+    }
+
+    @Transactional
+    public ParticipantResponse joinWatchSpaceByInvite(
+            String inviteCode,
+            Long userId
+    ) {
+        WatchSpace watchSpace = watchSpaceRepository
+                .findByInviteCode(inviteCode)
+                .orElseThrow(InvalidInviteCodeException::new);
+
+        return joinWatchSpace(watchSpace.getId(), userId);
     }
 }

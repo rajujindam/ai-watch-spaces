@@ -24,4 +24,17 @@ public class ChatEventFactory {
                 data
         );
     }
+    public WebSocketEvent createTypingEvent(
+            Long userId,
+            boolean typing) {
+
+        return new WebSocketEvent(
+                "chat.typing",
+                Map.of(
+                        "userId", userId,
+                        "typing", typing,
+                        "timestamp", Instant.now().toString()
+                )
+        );
+    }
 }

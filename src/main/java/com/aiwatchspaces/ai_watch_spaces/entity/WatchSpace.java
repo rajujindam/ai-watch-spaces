@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "watch_spaces")
@@ -47,6 +48,12 @@ public class WatchSpace {
     @Column
     private LocalDateTime endedAt;
 
+    @Column(nullable = false)
+    private Boolean locked = false;
+
+    @Column(unique = true, length = 36)
+    private String inviteCode;
+
     public WatchSpace(
             String name,
             Long hostId,
@@ -63,5 +70,6 @@ public class WatchSpace {
         this.aiVerbosity = aiVerbosity;
         this.votingEnabled = votingEnabled;
         this.createdAt = LocalDateTime.now();
+        this.inviteCode = UUID.randomUUID().toString();
     }
 }

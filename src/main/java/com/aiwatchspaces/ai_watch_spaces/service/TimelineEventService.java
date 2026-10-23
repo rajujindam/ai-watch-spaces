@@ -108,6 +108,7 @@ public class TimelineEventService {
                 event.getPayload()
         );
     }
+
     @Transactional
     public List<TimelineEventResponse> createMetadata(
             CreateTimelineMetadataRequest request
@@ -145,6 +146,19 @@ public class TimelineEventService {
 
         return savedEvents.stream()
                 .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<TimelineEventResponse> getTriviaEventsInRange(
+            Long titleId,
+            Integer startSeconds,
+            Integer endSeconds
+    ) {
+        return getEventsInRange(titleId, startSeconds, endSeconds)
+                .stream()
+                .filter(event ->
+                        "TRIVIA".equalsIgnoreCase(event.getEventType()))
                 .toList();
     }
 }

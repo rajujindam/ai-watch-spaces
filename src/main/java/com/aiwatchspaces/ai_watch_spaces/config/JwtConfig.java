@@ -6,6 +6,10 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.*;
 
@@ -35,9 +39,34 @@ public class JwtConfig {
 
     @Bean
     public ReactiveJwtDecoder jwtDecoder(SecretKey jwtSecretKey) {
-        return NimbusReactiveJwtDecoder
-                .withSecretKey(jwtSecretKey)
-                .macAlgorithm(MacAlgorithm.HS256)
-                .build();
+
+        NimbusReactiveJwtDecoder decoder =
+                NimbusReactiveJwtDecoder
+                        .withSecretKey(jwtSecretKey)
+                        .macAlgorithm(MacAlgorithm.HS256)
+                        .build();
+
+        OAuth2TokenValidator<Jwt> tokenTypeValidator = jwt -> {
+            if ("access".equals(jwt.getClaimAsString("token_type"))) {
+                return OAuth2TokenValidatorResult.success();
+            }
+
+            return OAuth2TokenValidatorResult.failure(
+                    new OAuth2Error(
+                            "invalid_token",
+                            "Only access tokens are accepted for API authentication",
+                            null
+                    )
+            );
+        };
+
+        decoder.setJwtValidator(
+                new DelegatingOAuth2TokenValidator<>(
+                        JwtValidators.createDefault(),
+                        tokenTypeValidator
+                )
+        );
+
+        return decoder;
     }
 }

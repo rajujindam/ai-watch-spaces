@@ -11,4 +11,10 @@ public interface WatchSpaceEventRepository
     List<WatchSpaceEvent> findByWatchSpaceIdOrderByOccurredAtAsc(
             Long watchSpaceId
     );
+
+    List<WatchSpaceEvent> findTop50ByWatchSpaceIdAndEventTypeOrderByOccurredAtDesc(
+            Long watchSpaceId,
+            String eventType
+    );
+
 }

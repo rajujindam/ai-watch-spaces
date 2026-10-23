@@ -11,11 +11,13 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/watch-spaces")
@@ -90,5 +92,82 @@ public class WatchSpaceController {
                 watchSpaceService.endWatchSpace(id, userId);
 
         return ResponseEntity.ok(response);
+    }
+    @PatchMapping("/{watchSpaceId}/lock")
+    public ResponseEntity<Void> setWatchSpaceLocked(
+            @PathVariable Long watchSpaceId,
+            @RequestParam boolean locked,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        Long userId = Long.parseLong(jwt.getSubject());
+
+        watchSpaceService.setWatchSpaceLocked(
+                watchSpaceId,
+                userId,
+                locked
+        );
+
+        return ResponseEntity.noContent().build();
+    }
+    @DeleteMapping("/{watchSpaceId}/participants/{participantUserId}")
+    public ResponseEntity<Void> removeParticipant(
+            @PathVariable Long watchSpaceId,
+            @PathVariable Long participantUserId,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        Long hostId = Long.parseLong(jwt.getSubject());
+
+        watchSpaceService.removeParticipant(
+                watchSpaceId,
+                hostId,
+                participantUserId
+        );
+
+        return ResponseEntity.noContent().build();
+    }
+    @PatchMapping("/{watchSpaceId}/host")
+    public ResponseEntity<Void> transferHost(
+            @PathVariable Long watchSpaceId,
+            @RequestParam Long newHostId,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        Long currentHostId = Long.parseLong(jwt.getSubject());
+
+        watchSpaceService.transferHost(
+                watchSpaceId,
+                currentHostId,
+                newHostId
+        );
+
+        return ResponseEntity.noContent().build();
+    }
+    @PostMapping("/{id}/invite")
+    public ResponseEntity<Map<String, String>> createInvite(
+            @PathVariable Long id,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        Long userId = Long.parseLong(jwt.getSubject());
+
+        String inviteCode = watchSpaceService.createInviteCode(id, userId);
+
+        return ResponseEntity.ok(Map.of(
+                "inviteCode", inviteCode,
+                "joinEndpoint", "/api/v1/watch-spaces/join/" + inviteCode,
+                "joinMethod", "POST",
+                "note", "Call joinEndpoint with your access-token Bearer authorization header"
+        ));
+    }
+
+    @PostMapping("/join/{inviteCode}")
+    public ResponseEntity<ParticipantResponse> joinByInvite(
+            @PathVariable String inviteCode,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        Long userId = Long.parseLong(jwt.getSubject());
+
+        ParticipantResponse response =
+                watchSpaceService.joinWatchSpaceByInvite(inviteCode, userId);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

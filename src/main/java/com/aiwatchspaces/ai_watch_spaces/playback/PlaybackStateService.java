@@ -215,4 +215,60 @@ public class PlaybackStateService {
 
         return title.getDurationSeconds();
     }
+
+
+    public PlaybackState pauseOnHostDisconnect(Long watchSpaceId) {
+        WatchSpace room = findRoom(watchSpaceId);
+
+        if (room.getStatus() != WatchSpaceStatus.LIVE) {
+            return getStateForInternalUse(watchSpaceId);
+        }
+
+        PlaybackState state = getOrCreateState(watchSpaceId);
+
+        synchronized (state) {
+            double currentPosition =
+                    getCurrentPosition(
+                            state,
+                            getTitleDuration(watchSpaceId)
+                    );
+
+            state.setPositionSeconds(currentPosition);
+            state.setStatus(PlaybackStatus.PAUSED);
+            state.setLastUpdatedAt(Instant.now());
+
+            return copyState(state);
+        }
+    }
+
+    private PlaybackState getStateForInternalUse(Long watchSpaceId) {
+        PlaybackState state = getOrCreateState(watchSpaceId);
+
+        synchronized (state) {
+            PlaybackState snapshot = copyState(state);
+            snapshot.setPositionSeconds(
+                    getCurrentPosition(
+                            state,
+                            getTitleDuration(watchSpaceId)
+                    )
+            );
+            return snapshot;
+        }
+    }
+
+    public double getExpectedPosition(Long watchSpaceId, Long userId) {
+        return getState(watchSpaceId, userId).getPositionSeconds();
+    }
+
+    public boolean isValidReportedPosition(
+            Long watchSpaceId,
+            double positionSeconds
+    ) {
+        if (!Double.isFinite(positionSeconds) || positionSeconds < 0) {
+            return false;
+        }
+
+        return positionSeconds <= getTitleDuration(watchSpaceId);
+    }
+
 }

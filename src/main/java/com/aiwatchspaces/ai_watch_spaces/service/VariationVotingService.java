@@ -109,6 +109,11 @@ public class VariationVotingService {
             Long variationId,
             Long optionId
     ) {
+        watchSpaceService.getWatchSpaceById(
+                watchSpaceId,
+                userId
+        );
+
         ActiveVote activeVote = activeVotes.get(watchSpaceId);
 
         if (activeVote == null) {

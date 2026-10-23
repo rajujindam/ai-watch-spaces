@@ -19,6 +19,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AdminTimelineMetadataController {
 
+    private static final int MAX_UPLOAD_BYTES = 1_048_576; // 1 MiB
+
     private final TimelineMetadataUploadService uploadService;
 
     @PostMapping(
@@ -29,7 +31,7 @@ public class AdminTimelineMetadataController {
             @RequestPart("file") FilePart file
     ) {
 
-        return DataBufferUtils.join(file.content())
+        return DataBufferUtils.join(file.content(), MAX_UPLOAD_BYTES)
                 .map(dataBuffer -> {
                     byte[] bytes = new byte[dataBuffer.readableByteCount()];
                     dataBuffer.read(bytes);

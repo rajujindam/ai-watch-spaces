@@ -89,4 +89,5 @@ class AiContentEngineTest {
 
         assertFalse(trivia.isBlank());
     }
+
 }
